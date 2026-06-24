@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "venom-opt"
+version = "0.1.0"
+description = "Verified Venom optimization passes for Vyper contracts (peephole-first)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+# the compile pipeline needs the Venom backend; the differential harness needs boa
+compile = ["vyper>=0.4.1"]
+test = ["pytest>=7", "titanoboa"]
+
+[project.scripts]
+# `venom-opt` is the umbrella command; the others are facet aliases for the same tool
+venom-opt = "venom_opt.cli:main"
+venom-peephole = "venom_opt.cli:main"
+venom-balance-patch = "venom_opt.cli:main"
+verified-venom-opt = "venom_opt.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/venom_opt"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

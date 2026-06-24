@@ -1,0 +1,5 @@
+name = "verified-venom-opt"
+defaultTargets = ["VenomOpt"]
+
+[[lean_lib]]
+name = "VenomOpt"

@@ -42,11 +42,15 @@ address.
 ## Quickstart
 
 ```bash
-make build     # contracts/ERC20.vy  -> artifacts/erc20.json   (needs vyper>=0.4.1)
-make demo      # report the rewrite (sites / length / changed bytes)
-make patch     # write the patched runtime hex
-make test      # python unit tests (+ titanoboa differential, if installed)
-make verify    # machine-check the soundness proof (mathlib-free Lean)
+make build         # contracts/ERC20.vy  -> artifacts/erc20.json   (needs vyper>=0.4.1)
+make demo          # report the rewrite (sites / length / changed bytes)
+make patch         # write the patched runtime hex
+make test          # unit + titanoboa differential (mint/transfer/approve/transferFrom
+                   #   parity incl. revert parity) + the EVMYulLean map guard below
+make verify        # machine-check the soundness proof (mathlib-free Lean)
+make check-mapping # guard the end-to-end map: the referenced EVMYulLean theorems
+                   #   still exist (skips if EVMYulLean is not alongside; point it
+                   #   with EVMYULLEAN_DIR)
 ```
 
 `make demo` on the bundled ERC-20:

@@ -14,7 +14,8 @@ dependencies = []
 [project.optional-dependencies]
 # the compile pipeline needs the Venom backend; the differential harness needs boa
 compile = ["vyper>=0.4.1"]
-test = ["pytest>=7", "titanoboa"]
+# `pip install -e .[test]` makes `make test` self-contained (no sibling venv needed)
+test = ["pytest>=7", "titanoboa>=0.2"]
 
 [project.scripts]
 # `venom-opt` is the umbrella command; the others are facet aliases for the same tool

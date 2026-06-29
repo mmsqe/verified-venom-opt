@@ -39,6 +39,17 @@ def _evmyullean_root() -> Path:
     return Path(__file__).resolve().parents[2] / "EVMYulLean"
 
 
+    """Short SHA of the EVMYulLean checkout being validated, or None if not a git repo."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip() or None
+    except Exception:
+        return None
+
+
 @pytest.fixture(scope="module")
 def venom_dir() -> Path:
     d = _evmyullean_root() / "EvmYul" / "Venom"

@@ -42,7 +42,7 @@ address.
 ## Quickstart
 
 ```bash
-make build         # contracts/ERC20.vy  -> artifacts/erc20.json   (needs vyper>=0.4.1)
+make build         # contracts/ERC20.vy  -> artifacts/erc20.json   (vyper pinned to master)
 make demo          # report the rewrite (sites / length / changed bytes)
 make patch         # write the patched runtime hex
 make test          # unit + titanoboa differential (mint/transfer/approve/transferFrom

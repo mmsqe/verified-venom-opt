@@ -7,15 +7,18 @@ name = "venom-opt"
 version = "0.1.0"
 description = "Verified Venom optimization passes for Vyper contracts (peephole-first)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<4"  # vyper master (0.5) requires >=3.11,<4
 license = { text = "MIT" }
-dependencies = []
+dependencies = [
+    "titanoboa @ git+https://github.com/vyperlang/titanoboa.git@master",
+    "vyper @ git+https://github.com/vyperlang/vyper.git@master",
+]
 
 [project.optional-dependencies]
 # the compile pipeline needs the Venom backend; the differential harness needs boa
-compile = ["vyper>=0.4.1"]
+compile = []
 # `pip install -e .[test]` makes `make test` self-contained (no sibling venv needed)
-test = ["pytest>=7", "titanoboa>=0.2"]
+test = ["pytest>=7"]
 
 [project.scripts]
 # `venom-opt` is the umbrella command; the others are facet aliases for the same tool
@@ -23,6 +26,10 @@ venom-opt = "venom_opt.cli:main"
 venom-peephole = "venom_opt.cli:main"
 venom-balance-patch = "venom_opt.cli:main"
 verified-venom-opt = "venom_opt.cli:main"
+
+[tool.hatch.metadata]
+# vyper / titanoboa are pinned to git master (direct references)
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/venom_opt"]

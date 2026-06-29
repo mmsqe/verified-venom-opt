@@ -25,8 +25,11 @@ verify:
 	$(CLI) verify
 
 # guard the README end-to-end map: the referenced EVMYulLean theorems still exist
-# (skips if EVMYulLean is not checked out alongside; point it with EVMYULLEAN_DIR)
+# (skips if EVMYulLean is not checked out alongside; point it with EVMYULLEAN_DIR).
+# Prints the EVMYulLean commit it validated against (provenance).
 check-mapping:
+	@d="$${EVMYULLEAN_DIR:-../EVMYulLean}"; \
+	  echo "map guard: validating against EVMYulLean @ $$(git -C "$$d" rev-parse --short HEAD 2>/dev/null || echo '<not a git checkout / not found>')"
 	PYTHONPATH=src python3 -m pytest tests/test_evmyullean_mapping.py -q
 
 all: build demo test verify

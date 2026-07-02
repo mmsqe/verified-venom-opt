@@ -9,6 +9,16 @@ map silently rots and nothing fails. This test pins the map: it asserts each
 referenced theorem still exists under its name in its file, and reports the
 EVMYulLean commit the map was validated against (provenance).
 
+Two soundness pillars are guarded:
+
+* ``MAPPING`` — the *balance-patch* chain: the ``~addr`` storage rewrite preserves
+  storage semantics against real ``EVM.step`` (slot injectivity → write-through →
+  load equivalence → solvency / ERC-20 spec).
+* ``CODEGEN_MAPPING`` — the *Venom→EVM codegen* chain: the generated EVM program
+  simulates the source Venom function (``codegen_correct`` / ``codegen_fn_correct``,
+  non-vacuously), block-by-block, so the compiled output of the (optimized) Venom
+  is itself proven correct.
+
 It is **skipped** when EVMYulLean is not checked out alongside this repo (so the
 repo stays self-contained for CI without the sibling). Point it explicitly with
 the ``EVMYULLEAN_DIR`` environment variable.
@@ -36,6 +46,21 @@ MAPPING = [
     ("doApprove_solvent", "Erc20.lean"),
     ("doTransfer_solvent", "Erc20.lean"),
     ("doTransferFrom_solvent", "Erc20.lean"),
+]
+
+# (theorem name, EVMYulLean file relative to EvmYul/Venom/) — the Venom->EVM
+# codegen-correctness pillar: the generated program simulates the source Venom
+# function, so the compiled output of the (optimized) Venom is proven correct.
+CODEGEN_MAPPING = [
+    # top-level: the generated program simulates the Venom function / context...
+    ("codegen_fn_correct", "Hol/Codegen/CodegenCorrectness.lean"),
+    ("codegen_correct", "Hol/Codegen/CodegenCorrectness.lean"),
+    # ...and it is non-vacuous (a real generated program, not an empty witness).
+    ("codegenFuel_correct_nonvacuous_witness", "Hol/Codegen/CodegenCorrectness.lean"),
+    # block-level simulation capstone the above rests on.
+    ("genBlockSimulation", "Hol/Codegen/GenBlockSim.lean"),
+    # variable-arity instruction milestone: LOG end-to-end through the generator.
+    ("genRegularInstPlan_log_sim", "Hol/Codegen/GenInstSim.lean"),
 ]
 
 
@@ -67,14 +92,23 @@ def venom_dir() -> Path:
     return d
 
 
-@pytest.mark.parametrize("name,basename", MAPPING, ids=[m[0] for m in MAPPING])
-def test_mapped_theorem_exists(venom_dir: Path, name: str, basename: str):
-    f = venom_dir / basename
-    assert f.is_file(), f"EVMYulLean file missing: {f} (README map drifted)"
+def _assert_theorem(venom_dir: Path, name: str, relpath: str) -> None:
+    f = venom_dir / relpath
+    assert f.is_file(), f"EVMYulLean file missing: {f} (map drifted)"
     text = f.read_text()
     assert f"theorem {name}" in text, (
-        f"theorem {name} not found in {basename} — the README end-to-end map has drifted"
+        f"theorem {name} not found in {relpath} — the EVMYulLean map has drifted"
     )
+
+
+@pytest.mark.parametrize("name,basename", MAPPING, ids=[m[0] for m in MAPPING])
+def test_mapped_theorem_exists(venom_dir: Path, name: str, basename: str):
+    _assert_theorem(venom_dir, name, basename)
+
+
+@pytest.mark.parametrize("name,relpath", CODEGEN_MAPPING, ids=[m[0] for m in CODEGEN_MAPPING])
+def test_codegen_theorem_exists(venom_dir: Path, name: str, relpath: str):
+    _assert_theorem(venom_dir, name, relpath)
 
 
 def test_provenance_recorded(venom_dir: Path):

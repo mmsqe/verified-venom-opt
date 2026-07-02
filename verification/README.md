@@ -35,3 +35,18 @@ bytecode** computes the same storage as the original — against EVMYulLean's re
 | `SlotAbstraction.write_opt_preserves_named` | a `~addr` write never disturbs a named low slot (`totalSupply`, …) |
 | `BalanceSlot.venomBalanceLoad_orig_opt_equiv` | original (keccak) and optimized (`~addr`) loads agree under the storage relation |
 | `Solvency.transfer_preserves_solvent` / `Erc20.*` | the rewrite preserves `Σ balances = totalSupply` and the ERC-20 spec |
+
+The rewrite operates on Venom IR, which is then compiled to EVM. That the
+compiler step itself is sound — the **generated EVM program simulates the
+source Venom function** — is proved in EVMYulLean's Venom→EVM codegen
+development, so the compiled output of the (optimized) Venom is correct too:
+
+| EVMYulLean result (`EvmYul/Venom/Hol/Codegen/`) | what it adds |
+|---|---|
+| `CodegenCorrectness.codegen_fn_correct` / `codegen_correct` | the generated program simulates the source Venom function / context |
+| `CodegenCorrectness.codegenFuel_correct_nonvacuous_witness` | …non-vacuously — a real generated program, not an empty/vacuous witness |
+| `GenBlockSim.genBlockSimulation` | the per-block simulation capstone the above rests on |
+| `GenInstSim.genRegularInstPlan_log_sim` | end-to-end sim for a variable-arity instruction (LOG), incl. the fixed operand order |
+
+Both pillars are drift-guarded by `tests/test_evmyullean_mapping.py`
+(`make check-mapping`), which also reports the EVMYulLean commit validated against.

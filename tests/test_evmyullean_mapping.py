@@ -6,7 +6,8 @@ computes the same storage as the original, against EVMYulLean's real ``EVM.step`
 — lives in the sibling EVMYulLean development, and the README maps to specific
 theorems there. If one of those is renamed or removed, the README's end-to-end
 map silently rots and nothing fails. This test pins the map: it asserts each
-referenced theorem still exists under its name in its file.
+referenced theorem still exists under its name in its file, and reports the
+EVMYulLean commit the map was validated against (provenance).
 
 It is **skipped** when EVMYulLean is not checked out alongside this repo (so the
 repo stays self-contained for CI without the sibling). Point it explicitly with
@@ -16,6 +17,7 @@ the ``EVMYULLEAN_DIR`` environment variable.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -28,6 +30,12 @@ MAPPING = [
     ("write_opt_preserves_named", "SlotAbstraction.lean"),
     ("venomBalanceLoad_orig_opt_equiv", "BalanceSlot.lean"),
     ("transfer_preserves_solvent", "Solvency.lean"),
+    # ERC-20 spec preservation — the README table's ``Erc20.*``: each token
+    # operation preserves solvency (Σ balances = totalSupply), so the ~addr
+    # rewrite keeps the ERC-20 spec.
+    ("doApprove_solvent", "Erc20.lean"),
+    ("doTransfer_solvent", "Erc20.lean"),
+    ("doTransferFrom_solvent", "Erc20.lean"),
 ]
 
 
@@ -39,6 +47,7 @@ def _evmyullean_root() -> Path:
     return Path(__file__).resolve().parents[2] / "EVMYulLean"
 
 
+def _evmyullean_sha(root: Path) -> str | None:
     """Short SHA of the EVMYulLean checkout being validated, or None if not a git repo."""
     try:
         out = subprocess.run(
@@ -66,3 +75,12 @@ def test_mapped_theorem_exists(venom_dir: Path, name: str, basename: str):
     assert f"theorem {name}" in text, (
         f"theorem {name} not found in {basename} — the README end-to-end map has drifted"
     )
+
+
+def test_provenance_recorded(venom_dir: Path):
+    """Report the EVMYulLean commit the map was validated against (provenance)."""
+    sha = _evmyullean_sha(_evmyullean_root())
+    if sha is None:
+        pytest.skip("EVMYulLean checkout is not a git repo — no provenance SHA available")
+    print(f"\nmap guard validated against EVMYulLean @ {sha}")
+    assert sha, "empty EVMYulLean provenance SHA"

@@ -20,6 +20,7 @@ THEOREMS = (
     "distinct_addresses_distinct_opt_slots",
     "write_no_alias",
     "read_own_write",
+    "unpatched_read_misses_patched_write",
 )
 
 

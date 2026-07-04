@@ -61,4 +61,25 @@ theorem read_own_write (σ : Word → Word) (a v : Word) :
     writeBal σ a v (optSlot a) = v := by
   simp [writeBal]
 
+/-! ## The completeness condition
+
+Injectivity makes the *rewritten* slot function safe; it does not by itself
+make a **partial** rewrite safe. If even one balance access keeps the original
+keccak slot derivation while the rest move to `optSlot`, the two functions
+address different storage wherever they differ, and reads miss writes. This is
+exactly what a shape-incomplete patcher produces (a batch-transfer loop whose
+in-loop keccak frames went unrecognized — caught by the differential harness),
+recorded here as a theorem. -/
+
+/-- **Partial patching is unsound.** A balance write through the optimized slot
+function is invisible to a read that still derives the slot any other way
+(e.g. an unrewritten keccak site): the read returns the stale pre-write value.
+Hence the patcher must rewrite *every* balance keccak site or refuse. -/
+theorem unpatched_read_misses_patched_write
+    (σ : Word → Word) (kec : Word → Word) (a v : Word)
+    (h : kec a ≠ optSlot a) :
+    writeBal σ a v (kec a) = σ (kec a) := by
+  simp only [writeBal]
+  rw [if_neg h]
+
 end VenomOpt

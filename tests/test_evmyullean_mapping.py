@@ -92,6 +92,31 @@ ABI_MAPPING = [
     ("abi_balanceOf_orig_opt_returndata_eq", "AbiBalance.lean"),
     ("abi_transfer_orig_opt_equiv", "AbiTransfer.lean"),
     ("transferStorage_rel", "AbiTransfer.lean"),
+    # dynamic-keyed maps: the outer-keccak -> ~innerHash rewrite is invisible
+    # at the ABI-call level with the relation quantified over the inner-hash
+    # value -- no collision-freedom hypothesis at all (Tier B).
+    ("abi_dynKeyGet_orig_opt_returndata_eq", "AbiDynKey.lean"),
+    # the multi-map boundary, machine-checked: packSlot (map-id packing for
+    # address keys, the future multi-map scheme) is jointly injective; and the
+    # impossibilities -- two full-word-key maps / >32-byte keys MUST alias
+    # (pigeonhole), so one-optimized-map-per-contract is forced, not a tool gap.
+    ("packSlot_injective", "SlotPacking.lean"),
+    ("two_fullword_maps_must_alias", "SlotPacking.lean"),
+    ("long_keys_must_alias", "SlotPacking.lean"),
+    # multi-slot VALUES: ~(key*stride + off) makes value windows abut instead
+    # of interleaving -- the sound layout the tool-side value-type guard
+    # points to (plain ~key + off corrupts adjacent keys deterministically).
+    ("strideSlot_injective", "SlotPacking.lean"),
+    # execution-level non-interference of the IR pass's packSlot blocks: two
+    # optimized maps in one contract never alias (the case ~key can't do) --
+    # the Lean counterpart of the multi-map differential test (test_ir_pass).
+    ("packSlot_cross_map_noninterference", "AbiMultiMap.lean"),
+    ("packSlot_load_own_write", "AbiMultiMap.lean"),
+    # multi-word VALUE maps: the strideSlot IR pass's actual output
+    # (sub (~(mul stride key)) off) equals strideSlot, whose distinct
+    # (key,field) pairs never overlap -- the case ~key corrupts.
+    ("venomStride_eq_strideSlot", "AbiMultiMap.lean"),
+    ("strideSlot_field_noninterference", "AbiMultiMap.lean"),
 ]
 
 # (theorem name, file relative to the evm-abi-lean repo root) — the

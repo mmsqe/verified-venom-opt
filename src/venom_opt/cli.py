@@ -51,6 +51,7 @@ def cmd_patch(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     from venom_opt.verified import THEOREMS, verify
+
     ok = verify(args.dir)
     print(f"soundness proof ({', '.join(THEOREMS)}): {'OK' if ok else 'FAILED'}")
     return 0 if ok else 1
@@ -58,7 +59,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 def cmd_demo(args: argparse.Namespace) -> int:
     rt, slot = _load(args)
-    patched = bp.patch(rt, slot)            # raises unless ≥1 site, so sites > 0 below
+    patched = bp.patch(rt, slot)  # raises unless ≥1 site, so sites > 0 below
     sites = bp.count_sites(rt, slot)
     changed = sum(a != b for a, b in zip(rt, patched))
     print(f"Balance slot  : {slot}")
@@ -86,8 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     ]:
         p = sub.add_parser(name, help=help_)
         p.add_argument("artifact", nargs="?", default="artifacts/erc20.json")
-        p.add_argument("--slot", type=lambda s: int(s, 0), default=None,
-                       help="override balanceOf slot (default: read from storageLayout)")
+        p.add_argument(
+            "--slot",
+            type=lambda s: int(s, 0),
+            default=None,
+            help="override balanceOf slot (default: read from storageLayout)",
+        )
         if name == "patch":
             p.add_argument("-o", "--out", help="write patched runtime hex here")
         p.set_defaults(func=fn)

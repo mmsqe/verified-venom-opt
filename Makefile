@@ -1,10 +1,15 @@
-.PHONY: build patch demo test verify check-mapping all clean
+.PHONY: build patch demo test verify check-mapping vectors lint fmt all clean
 
 CLI = PYTHONPATH=src python3 -m venom_opt.cli
+
+# ruff via uvx (no install needed; this repo is uv-managed, see uv.lock)
+RUFF = uvx ruff
+PYSRC = src tests scripts
 
 # Vyper ERC20 -> Venom artifact (creation + runtime + storage layout)
 build:
 	$(CLI) compile contracts/ERC20.vy -o artifacts/erc20.json
+	$(CLI) compile contracts/ERC20Dyn.vy -o artifacts/erc20dyn.json
 
 # report the rewrite (sites, length-preservation, changed bytes)
 demo:
@@ -17,6 +22,13 @@ patch:
 # python unit + (boa) differential tests
 test:
 	PYTHONPATH=src python3 -m pytest tests -q
+
+# regenerate the verified calldata vectors from evm-abi-lean's encoder at the
+# PINNED git commit (cloned into a cache; no local checkout needed — override
+# with ABI_LEAN=<path> or ABI_LEAN_REV/ABI_LEAN_GIT); test_abi_vectors.py pins
+# the in-repo encoder to these bytes and the dynamic differential tests drive them
+vectors:
+	python3 scripts/gen_abi_vectors.py
 
 # machine-check the soundness proof (mathlib-free Lean).
 # Pinned to leanprover/lean4:v4.30.0-rc1 (verification/lean-toolchain) — elan
@@ -31,6 +43,14 @@ check-mapping:
 	@d="$${EVMYULLEAN_DIR:-../EVMYulLean}"; \
 	  echo "map guard: validating against EVMYulLean @ $$(git -C "$$d" rev-parse --short HEAD 2>/dev/null || echo '<not a git checkout / not found>')"
 	PYTHONPATH=src python3 -m pytest tests/test_evmyullean_mapping.py -q
+
+# lint the Python sources (compiler, tests, vector generator)
+lint:
+	$(RUFF) check $(PYSRC)
+
+# auto-format the Python sources in place
+fmt:
+	$(RUFF) format $(PYSRC)
 
 all: build demo test verify
 

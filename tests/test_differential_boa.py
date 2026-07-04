@@ -57,6 +57,7 @@ def instances():
 
 # ----- observation / call helpers --------------------------------------------
 
+
 def _call(c, data: bytes, sender: bytes | None = None):
     return boa.env.raw_call(c, sender=sender, data=data)
 
@@ -83,6 +84,7 @@ def _reverts(c, data: bytes, sender: bytes | None = None) -> bool:
 
 
 # ----- success-path parity ----------------------------------------------------
+
 
 def test_mint_transfer_parity(instances):
     """mint to A, transfer A->B: identical balances on both runtimes."""
@@ -146,6 +148,7 @@ def test_full_balance_map_parity(instances):
 
 # ----- failure-path (revert) parity ------------------------------------------
 
+
 def test_insufficient_balance_reverts_identically(instances):
     """Transferring more than the balance reverts on BOTH runtimes (safe-math
     underflow) — failure parity, not just success parity."""
@@ -172,6 +175,7 @@ def test_transferfrom_without_allowance_reverts_identically(instances):
 
 
 # ----- the point of the peephole ---------------------------------------------
+
 
 def test_gas_not_worse(instances):
     """The peephole never costs more — it drops a KECCAK256 per balance access."""

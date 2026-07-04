@@ -37,6 +37,26 @@ different memory than the linearly-preceding bytes established. Unknown never
 matches ``balance_slot``, so imprecision can only *miss* sites (caught by the
 site-count check and the differential tests), never rewrite a wrong one.
 
+**Beyond address keys.** The pattern is keyed by the *slot* at the frame base,
+so ``patch(code, slot)`` optimizes whichever map you point it at:
+
+* single-word keys (``address``, ``bytes32``, ``uintN``) — the frame's key IS
+  the key; ``~key`` is injective outright;
+* dynamic keys (``String[..]``/``Bytes[..]``) — Venom derives the slot in two
+  stages: an inner *variable-size* keccak of the key bytes (never matched by
+  the patterns above), then the same 64-byte outer keccak over
+  ``slot ++ innerHash``. Patching rewrites only the outer stage to
+  ``~innerHash``, dropping one KECCAK256 per access; inner-hash collisions
+  collide in the ORIGINAL derivation too, so the rewrite is equivalence-
+  preserving relative to the original with no new assumptions.
+
+**ONE optimized map per contract.** ``~key`` erases the slot input, so
+optimizing two maps in the same contract aliases them *deterministically*
+whenever their key words coincide (e.g. ``balanceOf[a]`` and
+``tags[bytes32(a)]``) — not a hash-collision risk, a certainty. ``patch``
+takes a single slot by design; do not feed its output back to optimize a
+second map.
+
 ``patch`` operates on **runtime** bytecode (to ``etch``/``set_code`` in a
 simulated EVM). For a real broadcast you cannot etch, so use ``patch_creation``,
 which patches the runtime *embedded inside the creation code* (length-preserving,
@@ -46,6 +66,7 @@ so a normal deploy runs the constructor and returns the optimized runtime).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 #: Default balanceOf slot. Resolve the real one per contract with
@@ -217,3 +238,49 @@ def balance_slot_from_artifact(path: str | Path) -> int:
     the correct ``bal_slot`` for this exact contract, no guessing."""
     art = json.loads(Path(path).read_text())
     return int(art["storageLayout"]["balanceOf"]["slot"])
+
+
+#: Map VALUE types occupying exactly one storage word — the only values the
+#: length-preserving ``~key`` rewrite is sound for. A multi-word value (struct,
+#: ``String[..]``/``Bytes[..]``, fixed array) lives at keccak-base+i; ``~key``
+#: packs bases densely (``~(k+1) = ~k - 1``), so adjacent keys' value windows
+#: would interleave — deterministic corruption, demonstrated by an
+#: out-of-gas explosion on the first write to a patched
+#: ``HashMap[address, String[64]]``. (The sound multi-word layout,
+#: ``strideSlot``, is proved in EVMYulLean's SlotPacking.lean and needs the
+#: future IR-level pass.)
+_WORD_VALUE = re.compile(r"^(u?int\d+|address|bool|decimal|bytes([12]?\d|3[0-2]))$")
+
+
+def _hashmap_value_type(type_str: str) -> str | None:
+    """The VALUE type of a ``HashMap[key, value]`` type string (top-level
+    comma split), or None if it isn't a HashMap."""
+    m = re.fullmatch(r"HashMap\[(.*)\]", type_str.strip())
+    if not m:
+        return None
+    inner, depth, split = m.group(1), 0, None
+    for i, ch in enumerate(inner):
+        depth += ch in "[("
+        depth -= ch in "])"
+        if ch == "," and depth == 0:
+            split = i
+            break
+    return inner[split + 1 :].strip() if split is not None else None
+
+
+def map_slot_from_artifact(path: str | Path, name: str) -> int:
+    """Slot of map ``name`` from the artifact's ``storageLayout``, refusing
+    maps whose VALUE spans more than one storage word (see ``_WORD_VALUE``)."""
+    art = json.loads(Path(path).read_text())
+    entry = art["storageLayout"][name]
+    value_type = _hashmap_value_type(entry.get("type", ""))
+    if value_type is None:
+        raise ValueError(f"{name} is not a HashMap (type: {entry.get('type')!r})")
+    if not _WORD_VALUE.match(value_type):
+        raise ValueError(
+            f"refusing to optimize {name}: its value type {value_type!r} spans "
+            "multiple storage words, and the length-preserving ~key rewrite "
+            "would interleave adjacent keys' value windows (see the module "
+            "docstring). Only single-word values are patchable."
+        )
+    return int(entry["slot"])

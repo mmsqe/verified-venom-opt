@@ -20,6 +20,7 @@ from venom_opt.abi import (
     enc_address,
     enc_bytes,
     enc_dyn_array,
+    enc_string,
     enc_tuple,
     enc_uint,
     encode_call,
@@ -44,6 +45,8 @@ def _enc(node: dict) -> Enc:
         return enc_uint(int(v))
     if t == "bytes":
         return enc_bytes(bytes.fromhex(v[2:]))
+    if t == "string":
+        return enc_string(v)
     if t == "address[]":
         return enc_dyn_array([enc_address(bytes.fromhex(x[2:])) for x in v])
     if t == "uint256[]":

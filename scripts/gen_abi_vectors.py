@@ -66,6 +66,10 @@ def _data(b: bytes) -> dict:
     return {"type": "bytes", "value": "0x" + b.hex()}
 
 
+def _str(v: str) -> dict:
+    return {"type": "string", "value": v}
+
+
 def _tup(*nodes: dict) -> dict:
     return {"type": "tuple", "value": list(nodes)}
 
@@ -96,6 +100,11 @@ VECTORS = [
     _note("note_gm", b"gm"),
     _note("note_full", b"\xab" * 64),
     ("pay_c_2", "pay((address,uint256))", [_tup(_addr(C), _u(2 * ONE))]),
+    # String-keyed map calls (MixedKeys.vy): dynamic key, two-stage slot hash
+    ("set_name_alice_7", "set_name(string,uint256)", [_str("alice"), _u(7)]),
+    ("set_name_max_9", "set_name(string,uint256)", [_str("x" * 64), _u(9)]),
+    ("names_alice", "names(string)", [_str("alice")]),
+    ("bump_name_alice", "bump_name(string)", [_str("alice")]),
 ]
 
 
@@ -107,6 +116,8 @@ def _lean_type(node: dict) -> str:
         return "u256"
     if t == "bytes":
         return ".bytes"
+    if t == "string":
+        return ".string"
     if t == "address[]":
         return ".array .address"
     if t == "uint256[]":
@@ -128,6 +139,8 @@ def _lean_value(node: dict) -> str:
             return ".bytes ByteArray.empty"
         lit = ", ".join(f"0x{b:02x}" for b in data)
         return f".bytes (ByteArray.mk #[{lit}])"
+    if t == "string":
+        return f'.string "{v}"'  # ASCII vector keys only, no escaping needed
     if t in ("address[]", "uint256[]"):
         elem = "address" if t == "address[]" else "uint256"
         inner = ", ".join(_lean_value({"type": elem, "value": x}) for x in v)

@@ -10,6 +10,9 @@ PYSRC = src tests scripts
 build:
 	$(CLI) compile contracts/ERC20.vy -o artifacts/erc20.json
 	$(CLI) compile contracts/ERC20Dyn.vy -o artifacts/erc20dyn.json
+	$(CLI) compile contracts/MixedKeys.vy -o artifacts/mixedkeys.json
+	$(CLI) compile contracts/DynValue.vy -o artifacts/dynvalue.json
+	$(CLI) compile contracts/TwoMaps.vy -o artifacts/twomaps.json
 
 # report the rewrite (sites, length-preservation, changed bytes)
 demo:

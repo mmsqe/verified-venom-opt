@@ -11,9 +11,13 @@ from venom_opt.compiler import write_artifact
 
 
 def _load(args: argparse.Namespace) -> tuple[bytes, int]:
-    """Runtime bytecode + the balanceOf slot (override, else from storageLayout)."""
+    """Runtime bytecode + the slot of the map to optimize: --slot wins, then
+    --map <name> (any word-keyed or hashed-key map from storageLayout), else
+    balanceOf."""
     rt = bp.runtime_from_artifact(args.artifact)
     slot = args.slot
+    if slot is None and getattr(args, "map", None):
+        slot = bp.map_slot_from_artifact(args.artifact, args.map)
     if slot is None:
         try:
             slot = bp.balance_slot_from_artifact(args.artifact)
@@ -45,6 +49,49 @@ def cmd_patch(args: argparse.Namespace) -> int:
     )
     if args.out:
         Path(args.out).write_text("0x" + patched.hex() + "\n")
+        print(f"wrote {args.out}")
+    return 0
+
+
+def cmd_irpatch(args: argparse.Namespace) -> int:
+    from venom_opt import ir_pass
+    import json
+
+    src = ir_pass.runtime_ir_from_contract(args.contract)
+    layout = json.loads(
+        __import__("subprocess").run(
+            ["vyper", "-f", "layout", str(args.contract)],
+            check=True, capture_output=True, text=True,
+        ).stdout
+    )["storage_layout"]
+    # --map NAME[=id] ...  (default id 0); each map's value type is guarded
+    slot_to_id: dict[int, int] = {}
+    for spec in args.map:
+        name, _, id_str = spec.partition("=")
+        entry = layout[name]
+        vtype = bp._hashmap_value_type(entry.get("type", ""))
+        if vtype is None or not bp._WORD_VALUE.match(vtype):
+            print(f"refusing {name}: value type {vtype!r} is not a single word", file=sys.stderr)
+            return 1
+        slot_to_id[int(entry["slot"])] = int(id_str) if id_str else 0
+    if not slot_to_id and not args.mwmap:
+        print("nothing to do: pass --map and/or --mwmap", file=sys.stderr)
+        return 1
+    if len(slot_to_id) > 1 and any(v == 0 for v in slot_to_id.values()):
+        print("multiple maps need DISTINCT nonzero ids (id 0 = ~key aliases); "
+              "use --map name=1 --map other=2", file=sys.stderr)
+        return 1
+    out_ir, n = ir_pass.optimize_ir(src, slot_to_id) if slot_to_id else (src, 0)
+    m = 0
+    for name in args.mwmap:
+        out_ir, m_i = ir_pass.optimize_ir_multiword(out_ir, int(layout[name]["slot"]))
+        m += m_i
+    bc = ir_pass.compile_ir(out_ir)
+    print(f"IR pass: {n} packSlot site(s) over {len(slot_to_id)} map(s) + "
+          f"{m} strideSlot base(s) over {len(args.mwmap)} multi-word map(s); "
+          f"runtime {len(bc)} bytes")
+    if args.out:
+        Path(args.out).write_text("0x" + bc.hex() + "\n")
         print(f"wrote {args.out}")
     return 0
 
@@ -91,11 +138,35 @@ def build_parser() -> argparse.ArgumentParser:
             "--slot",
             type=lambda s: int(s, 0),
             default=None,
-            help="override balanceOf slot (default: read from storageLayout)",
+            help="override the optimized map's slot (default: balanceOf from storageLayout)",
+        )
+        p.add_argument(
+            "--map",
+            default=None,
+            help="optimize this map instead (a storageLayout name, e.g. 'names'); "
+            "ONE map per contract — see the balance_patch module docstring",
         )
         if name == "patch":
             p.add_argument("-o", "--out", help="write patched runtime hex here")
         p.set_defaults(func=fn)
+
+    ip = sub.add_parser(
+        "irpatch",
+        help="IR-level pass: optimize one or more maps with packSlot (multi-map)",
+    )
+    ip.add_argument("contract")
+    ip.add_argument(
+        "--map", action="append", default=[], metavar="NAME[=ID]",
+        help="optimize map NAME with packing id ID (default 0); repeat for "
+        "several maps, each needing a DISTINCT nonzero id",
+    )
+    ip.add_argument(
+        "--mwmap", action="append", default=[], metavar="NAME",
+        help="optimize a MULTI-WORD-value map NAME with the strideSlot scheme "
+        "(struct / String / Bytes values); one such map per contract",
+    )
+    ip.add_argument("-o", "--out", help="write optimized runtime hex here")
+    ip.set_defaults(func=cmd_irpatch)
 
     v = sub.add_parser("verify", help="machine-check the soundness proof (Lean)")
     v.add_argument("--dir", default=None, help="verification/ project dir")

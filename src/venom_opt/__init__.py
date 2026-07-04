@@ -19,7 +19,7 @@ tuples) for the differential harness. The tool installs as ``venom-opt``
 ``verified-venom-opt`` as facet aliases.
 """
 
-from venom_opt import abi, balance_patch, compiler, erc20_abi, verified
+from venom_opt import abi, balance_patch, compiler, erc20_abi, ir_pass, verified
 
-__all__ = ["abi", "balance_patch", "compiler", "erc20_abi", "verified"]
+__all__ = ["abi", "balance_patch", "compiler", "erc20_abi", "ir_pass", "verified"]
 __version__ = "0.1.0"

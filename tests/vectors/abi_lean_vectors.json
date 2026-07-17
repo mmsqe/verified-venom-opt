@@ -1,6 +1,6 @@
 {
   "generator": "scripts/gen_abi_vectors.py (evm-abi-lean functionSelector + encodeArgs)",
-  "abi_lean_commit": "589a945",
+  "abi_lean_commit": "eaef0ff",
   "vectors": [
     {
       "name": "transfer_b_1",

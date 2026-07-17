@@ -71,6 +71,30 @@ CODEGEN_MAPPING = [
     ("genBlockSimulation", "Hol/Codegen/GenBlockSim.lean"),
     # variable-arity instruction milestone: LOG end-to-end through the generator.
     ("genRegularInstPlan_log_sim", "Hol/Codegen/GenInstSim.lean"),
+    # --- the RECIPE route (2026-07) -------------------------------------------
+    # The driver that makes the claim general: it reduces an ARBITRARY function's
+    # codegen_correct to a per-block obligation, so the chain above is no longer
+    # tied to hand-built examples.
+    ("codegen_correct_ofBlocks_recipeW", "Hol/Codegen/GenBlockSimExample.lean"),
+    # ...and its invariant-carrying form, which is what lets a recipe depend on
+    # VALUES (not just shapes) — required by the RETURN/REVERT capstones.
+    ("codegen_correct_ofBlocks_recipeW_inv", "Hol/Codegen/GenBlockSimExample.lean"),
+    # Terminator coverage on REAL generated programs. DJMP is the hardest (its
+    # dispatch mints trampoline labels); pinning it guards the whole 8/8 claim.
+    ("codegen_correct_djFn_recipeW", "Hol/Codegen/GenBlockSimExample.lean"),
+    # SYMBOLIC-size RETURN/REVERT: the call value is only BOUNDED, not pinned to
+    # zero, so the memory operands are genuinely symbolic. These carry the first
+    # invariant in that development to constrain the ASM side.
+    ("codegen_correct_rFn_symbolic", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("codegen_correct_tFn_symbolic", "Hol/Codegen/GenBlockSimExample.lean"),
+    # Non-vacuity for the above: the statement has a `| _ => True` catch-all, so
+    # the REAL arm must be shown to fire — here for EVERY non-halted state.
+    ("rFn_reverts_sym", "Hol/Codegen/GenBlockSimExample.lean"),
+    # Scope honesty: RET is codegen-ready and COMPILED, but its IntRet lands in
+    # that catch-all, so codegen_correct is VACUOUSLY true for RET-terminated
+    # functions. This theorem proves that, and pinning it stops the 8/8 claim
+    # from being read as "all ten isTerminator opcodes".
+    ("codegen_correct_retFn_vacuous", "Hol/Codegen/GenBlockSimExample.lean"),
 ]
 
 # (theorem name, EVMYulLean file relative to EvmYul/Venom/) — the dynamic-ABI

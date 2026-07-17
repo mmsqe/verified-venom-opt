@@ -37,7 +37,7 @@ OUT = HERE / "tests" / "vectors" / "abi_lean_vectors.json"
 #: The verified encoder's source: a pinned evm-abi-lean commit. Bump the pin
 #: (and regenerate) deliberately — the JSON records it as provenance.
 ABI_LEAN_GIT = "https://github.com/yihuang/evm-abi-lean.git"
-ABI_LEAN_REV = "589a94587a71c746e4e8af9b13c8d972b734bd75"
+ABI_LEAN_REV = "eaef0ff749f44149dc2c83e6c2fcbeea47bd5f2a"
 
 ONE = 10**18
 A, B, C, D = ("0x" + x.to_bytes(20, "big").hex() for x in (0xAA, 0xBB, 0xCC, 0xDD))

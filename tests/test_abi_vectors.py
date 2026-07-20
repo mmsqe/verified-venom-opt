@@ -3,7 +3,7 @@
 ``tests/vectors/abi_lean_vectors.json`` is generated out-of-process by
 ``scripts/gen_abi_vectors.py`` from the *verified* encoder in evm-abi-lean
 (``functionSelector`` + ``encodeArgs``, roundtrip-proved by
-``roundtrip_args_wff``). These tests pin :mod:`venom_opt.abi` (and the
+``roundtrip_args``). These tests pin :mod:`venom_opt.abi` (and the
 selector helper) to those bytes — so the calldata the differential tests
 drive is not merely eth_abi-shaped, it is the verified encoder's output.
 """

@@ -13,7 +13,7 @@ A value is encoded as an :data:`Enc` pair ``(is_dynamic, payload)``:
   their payload to the tail area (offsets are relative to the enclosing frame).
 
 The layout reference is the *verified* encoder in the sibling evm-abi-lean
-development (``encodeArgs``, roundtrip-proven by ``roundtrip_args_wff``,
+development (``encodeArgs``, roundtrip-proven by ``roundtrip_args``,
 nested tuples/structs included). The harness stays Python-only — the same
 decoupling philosophy as the EVMYulLean mapping guard — but the unit tests
 cross-check byte-for-byte against ``eth_abi``.

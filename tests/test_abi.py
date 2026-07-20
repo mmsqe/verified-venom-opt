@@ -4,7 +4,7 @@ Every encoding is cross-checked byte-for-byte against ``eth_abi`` (the
 reference implementation titanoboa already ships), across the static, dynamic,
 and nested shapes the differential harness needs. The *verified* reference for
 these layouts is evm-abi-lean's ``encodeArgs`` (roundtrip-proven by
-``roundtrip_args_wff``); ``eth_abi`` is the executable stand-in here.
+``roundtrip_args``); ``eth_abi`` is the executable stand-in here.
 """
 
 from __future__ import annotations

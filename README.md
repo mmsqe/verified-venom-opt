@@ -123,10 +123,14 @@ struct argument on the same balance layout. Its differential tests are driven
 by **verified calldata**: `make vectors` regenerates
 `tests/vectors/abi_lean_vectors.json` out-of-process from the
 [evm-abi-lean](https://github.com/yihuang/evm-abi-lean) encoder
-(`functionSelector` + `encodeArgs`, roundtrip-proved by `roundtrip_args_wff`)
-at a **pinned git commit** — cloned into a cache on first use, so no local
-checkout is required (override with `ABI_LEAN=<path>` or
-`ABI_LEAN_REV`/`ABI_LEAN_GIT`); the JSON records the pin as provenance.
+(`functionSelector` + `encodeArgs`, roundtrip-proved by `roundtrip_args`)
+at a **pinned git commit**, cloned into a cache on first use; the JSON records
+the pin as provenance. **The current pin is not yet pushed**, so for now the
+regeneration needs a local checkout — `ABI_LEAN=<path> make vectors`. (The
+Ty-indexed rewrite landed the codec before restoring keccak selectors, so no
+published rev yet has both the encoder and `functionSelector`; once
+evm-abi-lean's `main` is pushed, the cached-clone path resolves on its own.
+Override with `ABI_LEAN_REV`/`ABI_LEAN_GIT` as usual.)
 `tests/test_abi_vectors.py` pins the in-repo encoder (`venom_opt.abi`, itself
 cross-checked against `eth_abi`) to those bytes.
 

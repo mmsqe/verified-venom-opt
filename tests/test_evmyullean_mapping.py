@@ -22,7 +22,9 @@ Three soundness pillars are guarded against EVMYulLean, one against evm-abi-lean
   dynamic differential tests drive (``tests/test_differential_dyn_boa.py``:
   DynArray / Bytes / struct) are the shapes EVMYulLean cross-validates in-build
   against the verified evm-abi-lean encoder (``lake build AbiCrossval``).
-* ``ABI_LEAN_MAPPING`` — the *verified-encoder* pillar in the evm-abi-lean sibling:
+* ``ABI_LEAN_MAPPING`` — the *verified-encoder* pillar in the evm-abi-lean sibling
+  (the codec roundtrip only; the argument level and the kernel-reducibility
+  bridge moved into EVMYulLean and are guarded by ``ABI_MAPPING`` above):
   the ABI encode/decode roundtrip theorems (dynamic arrays / tuples / nested
   structs included). :mod:`venom_opt.abi` mirrors those layouts; ``eth_abi``
   cross-checks them executably (``tests/test_abi.py``), these pin them
@@ -37,6 +39,7 @@ variables.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -68,33 +71,33 @@ CODEGEN_MAPPING = [
     # ...and it is non-vacuous (a real generated program, not an empty witness).
     ("codegenFuel_correct_nonvacuous_witness", "Hol/Codegen/CodegenCorrectness.lean"),
     # block-level simulation capstone the above rests on.
-    ("genBlockSimulation", "Hol/Codegen/GenBlockSim.lean"),
+    ("genBlockSimulation", "Hol/Codegen/GenBlockSim/CfgHfsim.lean"),
     # variable-arity instruction milestone: LOG end-to-end through the generator.
-    ("genRegularInstPlan_log_sim", "Hol/Codegen/GenInstSim.lean"),
+    ("genRegularInstPlan_log_sim", "Hol/Codegen/GenInstSim/JoinProducers.lean"),
     # --- the RECIPE route (2026-07) -------------------------------------------
     # The driver that makes the claim general: it reduces an ARBITRARY function's
     # codegen_correct to a per-block obligation, so the chain above is no longer
     # tied to hand-built examples.
-    ("codegen_correct_ofBlocks_recipeW", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("codegen_correct_ofBlocks_recipeW", "Hol/Codegen/GenBlockSimExample/RecipeWalk.lean"),
     # ...and its invariant-carrying form, which is what lets a recipe depend on
     # VALUES (not just shapes) — required by the RETURN/REVERT capstones.
-    ("codegen_correct_ofBlocks_recipeW_inv", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("codegen_correct_ofBlocks_recipeW_inv", "Hol/Codegen/GenBlockSimExample/RecipeWalk.lean"),
     # Terminator coverage on REAL generated programs. DJMP is the hardest (its
     # dispatch mints trampoline labels); pinning it guards the whole 8/8 claim.
-    ("codegen_correct_djFn_recipeW", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("codegen_correct_djFn_recipeW", "Hol/Codegen/GenBlockSimExample/RecipeSlices.lean"),
     # SYMBOLIC-size RETURN/REVERT: the call value is only BOUNDED, not pinned to
     # zero, so the memory operands are genuinely symbolic. These carry the first
     # invariant in that development to constrain the ASM side.
-    ("codegen_correct_rFn_symbolic", "Hol/Codegen/GenBlockSimExample.lean"),
-    ("codegen_correct_tFn_symbolic", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("codegen_correct_rFn_symbolic", "Hol/Codegen/GenBlockSimExample/RecipeSlices.lean"),
+    ("codegen_correct_tFn_symbolic", "Hol/Codegen/GenBlockSimExample/RecipeSlices.lean"),
     # Non-vacuity for the above: the statement has a `| _ => True` catch-all, so
     # the REAL arm must be shown to fire — here for EVERY non-halted state.
-    ("rFn_reverts_sym", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("rFn_reverts_sym", "Hol/Codegen/GenBlockSimExample/RecipeSlices.lean"),
     # Scope honesty: RET is codegen-ready and COMPILED, but its IntRet lands in
     # that catch-all, so codegen_correct is VACUOUSLY true for RET-terminated
     # functions. This theorem proves that, and pinning it stops the 8/8 claim
     # from being read as "all ten isTerminator opcodes".
-    ("codegen_correct_retFn_vacuous", "Hol/Codegen/GenBlockSimExample.lean"),
+    ("codegen_correct_retFn_vacuous", "Hol/Codegen/GenBlockSimExample/RecipeSlices.lean"),
 ]
 
 # (theorem name, EVMYulLean file relative to EvmYul/Venom/) — the dynamic-ABI
@@ -141,6 +144,18 @@ ABI_MAPPING = [
     # (key,field) pairs never overlap -- the case ~key corrupts.
     ("venomStride_eq_strideSlot", "AbiMultiMap.lean"),
     ("strideSlot_field_noninterference", "AbiMultiMap.lean"),
+    # The argument level and the kernel-reducibility bridge live HERE, not in
+    # evm-abi-lean: that library's scope is the codec roundtrip, and ``encodeArgs``
+    # is definitionally the tuple level, so ``roundtrip_args`` is a one-line
+    # corollary. ``encode``/``decode`` are well-founded-recursive over ``Ty``
+    # (``Acc.rec``, kernel-opaque), so concrete encodings do not reduce under
+    # ``decide +kernel``; ``CodecEval`` adds a fuel-indexed structural mirror plus
+    # these two equalities, which is what lets ``AbiCrossval`` check concrete
+    # calldata on base axioms. Pin them: if they go, that target silently
+    # regresses to a ``native_decide`` computational axiom.
+    ("roundtrip_args", "AbiLean/Args.lean"),
+    ("encodeF_eq_encode", "AbiLean/CodecEval.lean"),
+    ("encodeArgs_eq_encodeF", "AbiLean/CodecEval.lean"),
 ]
 
 # (theorem name, file relative to the evm-abi-lean repo root) — the
@@ -148,8 +163,12 @@ ABI_MAPPING = [
 # well-formed ABI types (nested tuples/structs included), the mathematical
 # reference for the layouts venom_opt.abi implements.
 ABI_LEAN_MAPPING = [
-    ("roundtrip_wf", "EvmAbi/Roundtrip.lean"),
-    ("roundtrip_args_wff", "EvmAbi/Roundtrip.lean"),
+    # The Ty-indexed rewrite replaced the ABIType codec (whose roundtrips carried
+    # explicit well-formedness hypotheses, hence the ``_wf`` / ``_wff`` suffixes)
+    # with a type-indexed value family: ``t.Val`` is already refined, so the
+    # statement is plain ``decode t (encode t v) = some v``. Both capstones now
+    # live beside the codec itself.
+    ("roundtrip", "EvmAbi/Codec.lean"),
 ]
 
 
@@ -186,7 +205,11 @@ def venom_dir() -> Path:
 def _assert_theorem(base: Path, name: str, relpath: str, repo: str = "EVMYulLean") -> None:
     f = base / relpath
     assert f.is_file(), f"{repo} file missing: {f} (map drifted)"
-    assert f"theorem {name}" in f.read_text(), f"theorem {name} not found in {relpath} — the {repo} map has drifted"
+    # Word-boundary match, not a substring one: several mapped names are prefixes
+    # of their neighbours (``roundtrip`` / ``roundtrip_args``), so a plain ``in``
+    # would let a deleted theorem pass on the strength of a longer sibling.
+    pat = re.compile(rf"^theorem {re.escape(name)}\b", re.MULTILINE)
+    assert pat.search(f.read_text()), f"theorem {name} not found in {relpath} — the {repo} map has drifted"
 
 
 @pytest.mark.parametrize("name,basename", MAPPING, ids=[m[0] for m in MAPPING])

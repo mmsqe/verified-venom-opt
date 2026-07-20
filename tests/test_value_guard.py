@@ -27,8 +27,9 @@ MIXEDKEYS = Path(__file__).resolve().parent.parent / "artifacts" / "mixedkeys.js
 
 # ----- the guard ---------------------------------------------------------------
 
+
 def test_refuses_dynamic_value_map():
-    with pytest.raises(ValueError, match="spans\nmultiple storage words|spans"):
+    with pytest.raises(ValueError, match=r"spans multiple storage words"):
         bp.map_slot_from_artifact(DYNVALUE, "notes")
 
 
@@ -91,7 +92,5 @@ def test_balance_patch_coexists_with_dynamic_value_map():
         boa.env.raw_call(c, data=encode_call(SET_NOTE, enc_address(A), enc_string(note)))
         boa.env.raw_call(c, data=encode_call(SET_NOTE, enc_address(A1), enc_string(note)))
     for probe in (NOTES + arg_addr(A), NOTES + arg_addr(A1), BALANCE_OF + arg_addr(A)):
-        assert bytes(boa.env.raw_call(orig, data=probe).output) == bytes(
-            boa.env.raw_call(opt, data=probe).output
-        )
+        assert bytes(boa.env.raw_call(orig, data=probe).output) == bytes(boa.env.raw_call(opt, data=probe).output)
     assert note.encode() in bytes(boa.env.raw_call(opt, data=NOTES + arg_addr(A)).output)

@@ -54,15 +54,20 @@ def cmd_patch(args: argparse.Namespace) -> int:
 
 
 def cmd_irpatch(args: argparse.Namespace) -> int:
-    from venom_opt import ir_pass
     import json
+
+    from venom_opt import ir_pass
 
     src = ir_pass.runtime_ir_from_contract(args.contract)
     layout = json.loads(
-        __import__("subprocess").run(
+        __import__("subprocess")
+        .run(
             ["vyper", "-f", "layout", str(args.contract)],
-            check=True, capture_output=True, text=True,
-        ).stdout
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        .stdout
     )["storage_layout"]
     # --map NAME[=id] ...  (default id 0); each map's value type is guarded
     slot_to_id: dict[int, int] = {}
@@ -78,8 +83,10 @@ def cmd_irpatch(args: argparse.Namespace) -> int:
         print("nothing to do: pass --map and/or --mwmap", file=sys.stderr)
         return 1
     if len(slot_to_id) > 1 and any(v == 0 for v in slot_to_id.values()):
-        print("multiple maps need DISTINCT nonzero ids (id 0 = ~key aliases); "
-              "use --map name=1 --map other=2", file=sys.stderr)
+        print(
+            "multiple maps need DISTINCT nonzero ids (id 0 = ~key aliases); use --map name=1 --map other=2",
+            file=sys.stderr,
+        )
         return 1
     out_ir, n = ir_pass.optimize_ir(src, slot_to_id) if slot_to_id else (src, 0)
     m = 0
@@ -87,9 +94,11 @@ def cmd_irpatch(args: argparse.Namespace) -> int:
         out_ir, m_i = ir_pass.optimize_ir_multiword(out_ir, int(layout[name]["slot"]))
         m += m_i
     bc = ir_pass.compile_ir(out_ir)
-    print(f"IR pass: {n} packSlot site(s) over {len(slot_to_id)} map(s) + "
-          f"{m} strideSlot base(s) over {len(args.mwmap)} multi-word map(s); "
-          f"runtime {len(bc)} bytes")
+    print(
+        f"IR pass: {n} packSlot site(s) over {len(slot_to_id)} map(s) + "
+        f"{m} strideSlot base(s) over {len(args.mwmap)} multi-word map(s); "
+        f"runtime {len(bc)} bytes"
+    )
     if args.out:
         Path(args.out).write_text("0x" + bc.hex() + "\n")
         print(f"wrote {args.out}")
@@ -108,7 +117,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
     rt, slot = _load(args)
     patched = bp.patch(rt, slot)  # raises unless ≥1 site, so sites > 0 below
     sites = bp.count_sites(rt, slot)
-    changed = sum(a != b for a, b in zip(rt, patched))
+    changed = sum(a != b for a, b in zip(rt, patched, strict=True))
     print(f"Balance slot  : {slot}")
     print(f"Original size : {len(rt)}")
     print(f"Patched size  : {len(patched)}  (length-preserving)")
@@ -156,12 +165,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ip.add_argument("contract")
     ip.add_argument(
-        "--map", action="append", default=[], metavar="NAME[=ID]",
+        "--map",
+        action="append",
+        default=[],
+        metavar="NAME[=ID]",
         help="optimize map NAME with packing id ID (default 0); repeat for "
         "several maps, each needing a DISTINCT nonzero id",
     )
     ip.add_argument(
-        "--mwmap", action="append", default=[], metavar="NAME",
+        "--mwmap",
+        action="append",
+        default=[],
+        metavar="NAME",
         help="optimize a MULTI-WORD-value map NAME with the strideSlot scheme "
         "(struct / String / Bytes values); one such map per contract",
     )

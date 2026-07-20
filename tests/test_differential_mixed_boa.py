@@ -23,10 +23,10 @@ import pytest
 
 boa = pytest.importorskip("boa")  # skip the whole module if titanoboa is absent
 
+from test_abi_vectors import load_vector_calldata  # noqa: E402
+
 from venom_opt import balance_patch as bp  # noqa: E402
 from venom_opt.erc20_abi import arg_addr, selector, word  # noqa: E402
-
-from test_abi_vectors import load_vector_calldata  # noqa: E402
 
 ARTIFACT = Path(__file__).resolve().parent.parent / "artifacts" / "mixedkeys.json"
 ONE = 10**18
@@ -75,6 +75,7 @@ def _out(c, data: bytes, sender: bytes | None = None) -> bytes:
 
 # ----- patcher-level: per-map sites, and patching one map spares the others ----
 
+
 def test_sites_per_map():
     runtime = bp.runtime_from_artifact(ARTIFACT)
     slots = _slots()
@@ -90,6 +91,7 @@ def test_sites_per_map():
 
 
 # ----- Tier A: balanceOf patched; ALL maps behave identically -------------------
+
 
 def test_balance_parity(instances):
     orig, opt = instances
@@ -144,6 +146,7 @@ def test_maps_do_not_interfere(instances):
 # to ~innerHash — dropping one KECCAK256 per access. Inner-hash collisions
 # collide in the original derivation too, so no new assumptions. The balance
 # and bytes32 maps stay on their keccak slots (one optimized map per contract).
+
 
 @pytest.fixture
 def names_instances():

@@ -205,8 +205,7 @@ def _rewrite_multiword_block(bb, slot: int, stride: int, fn, defs: dict) -> int:
         # field off:  add base, off  ->  sub base, off  (base first)
         for _ubb, uinst in uses:
             if uinst.opcode == "add":
-                other = next(o for o in uinst.operands
-                             if not (isinstance(o, IRVariable) and o.name == base.name))
+                other = next(o for o in uinst.operands if not (isinstance(o, IRVariable) and o.name == base.name))
                 uinst.opcode = "sub"
                 uinst.operands = [base, other]
         count += 1
@@ -238,7 +237,7 @@ def compile_ir(venom_src: str, evm_version: str | None = None) -> bytes:
         f.write(venom_src)
         path = f.name
     try:
-        out = subprocess.run(args + [path], check=True, capture_output=True, text=True).stdout
+        out = subprocess.run([*args, path], check=True, capture_output=True, text=True).stdout
     finally:
         Path(path).unlink()
     hexstr = out.strip()
@@ -249,6 +248,8 @@ def runtime_ir_from_contract(contract: str | Path) -> str:
     """Emit a Vyper contract's runtime Venom IR text (`-f ir_runtime`)."""
     out = subprocess.run(
         ["vyper", "--experimental-codegen", "-f", "ir_runtime", str(contract)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     return out

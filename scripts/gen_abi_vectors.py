@@ -190,7 +190,7 @@ def _lean_value(node: dict) -> str:
 
 def _lean_script() -> str:
     evals = []
-    for name, sig, args in VECTORS:
+    for name, _sig, args in VECTORS:
         types = "[" + ", ".join(_lean_type(n) for n in args) + "]"
         # the argument tuple is itself a TupleVal, so it too ends in ⟨⟩
         values = "(" + "".join(_lean_value(n) + ", " for n in args) + "⟨⟩)"

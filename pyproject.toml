@@ -47,3 +47,8 @@ quote-style = "double"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.22",
+]

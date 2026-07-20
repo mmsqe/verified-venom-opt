@@ -30,13 +30,16 @@ def _slots(contract: Path) -> dict[str, int]:
     layout = json.loads(
         subprocess.run(
             ["vyper", "-f", "layout", str(contract)],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout
     )["storage_layout"]
     return {k: v["slot"] for k, v in layout.items()}
 
 
 # ----- pass-level: rewrite counts + IR/compile round trip ----------------------
+
 
 def test_single_map_rewrites_and_compiles():
     src = ir_pass.runtime_ir_from_contract(ERC20)
@@ -78,15 +81,14 @@ def _call(c, sig: str, key: bytes, val: int):
 
 # ----- the decisive case: two maps, one contract, distinct ids ------------------
 
+
 def test_two_maps_distinct_ids_no_alias():
     """balances (id 1) and bonuses (id 2) probed at the SAME key never
     interfere — packSlot_injective / cross_map, the case ~key cannot do."""
     src = ir_pass.runtime_ir_from_contract(TWOMAPS)
     slots = _slots(TWOMAPS)
     orig = _etch(ir_pass.compile_ir(src))
-    opt = _etch(ir_pass.compile_ir(
-        ir_pass.optimize_ir(src, {slots["balances"]: 1, slots["bonuses"]: 2})[0]
-    ))
+    opt = _etch(ir_pass.compile_ir(ir_pass.optimize_ir(src, {slots["balances"]: 1, slots["bonuses"]: 2})[0]))
     key = (0x1234).to_bytes(20, "big")
     for c in (orig, opt):
         _call(c, "set_balance(address,uint256)", key, 100)
@@ -101,9 +103,7 @@ def test_two_maps_same_id_zero_aliases():
     shared key — this is why distinct ids (packSlot) are required."""
     src = ir_pass.runtime_ir_from_contract(TWOMAPS)
     slots = _slots(TWOMAPS)
-    bad = _etch(ir_pass.compile_ir(
-        ir_pass.optimize_ir(src, {slots["balances"]: 0, slots["bonuses"]: 0})[0]
-    ))
+    bad = _etch(ir_pass.compile_ir(ir_pass.optimize_ir(src, {slots["balances"]: 0, slots["bonuses"]: 0})[0]))
     key = (0x1234).to_bytes(20, "big")
     _call(bad, "set_balance(address,uint256)", key, 100)
     _call(bad, "set_bonus(address,uint256)", key, 7)
@@ -115,9 +115,7 @@ def test_two_maps_distinct_keys_independent():
     """Distinct keys in the two optimized maps stay independent."""
     src = ir_pass.runtime_ir_from_contract(TWOMAPS)
     slots = _slots(TWOMAPS)
-    opt = _etch(ir_pass.compile_ir(
-        ir_pass.optimize_ir(src, {slots["balances"]: 1, slots["bonuses"]: 2})[0]
-    ))
+    opt = _etch(ir_pass.compile_ir(ir_pass.optimize_ir(src, {slots["balances"]: 1, slots["bonuses"]: 2})[0]))
     ka, kb = (0xAA).to_bytes(20, "big"), (0xBB).to_bytes(20, "big")
     _call(opt, "set_balance(address,uint256)", ka, 11)
     _call(opt, "set_bonus(address,uint256)", kb, 22)
@@ -165,8 +163,7 @@ def _dynvalue_ir_pair(mwmap="notes", pack=None):
 def _set_note(c, key: bytes, note: str):
     from venom_opt.abi import enc_address, enc_string, encode_call
 
-    boa.env.raw_call(c, data=encode_call(selector("set_note(address,string)"),
-                                         enc_address(key), enc_string(note)))
+    boa.env.raw_call(c, data=encode_call(selector("set_note(address,string)"), enc_address(key), enc_string(note)))
 
 
 def _note(c, key: bytes) -> bytes:
@@ -196,8 +193,9 @@ def test_strideslot_coexists_with_packslot_balance():
         _set_note(c, a, "hello world " * 4)
         boa.env.raw_call(c, data=selector("mint(address,uint256)") + arg_addr(a) + word(99))
     assert _note(orig, a) == _note(opt, a)
-    assert (bytes(boa.env.raw_call(orig, data=selector("balanceOf(address)") + arg_addr(a)).output)
-            == bytes(boa.env.raw_call(opt, data=selector("balanceOf(address)") + arg_addr(a)).output))
+    assert bytes(boa.env.raw_call(orig, data=selector("balanceOf(address)") + arg_addr(a)).output) == bytes(
+        boa.env.raw_call(opt, data=selector("balanceOf(address)") + arg_addr(a)).output
+    )
 
 
 def test_strideslot_rewrites_base_count():

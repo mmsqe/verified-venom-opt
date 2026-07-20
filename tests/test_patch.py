@@ -43,7 +43,7 @@ def test_patch_removes_all_sites(runtime: bytes, slot: int):
 
 def test_patch_changes_three_bytes_per_site(runtime: bytes, slot: int):
     patched = bp.patch(runtime, slot)
-    changed = sum(a != b for a, b in zip(runtime, patched))
+    changed = sum(a != b for a, b in zip(runtime, patched, strict=True))
     assert changed == 3 * bp.count_sites(runtime, slot)  # keccak tail -> MLOAD/NOT
 
 

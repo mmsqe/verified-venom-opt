@@ -3,11 +3,20 @@
 
 Out-of-process vector generation: every dynamic-calldata byte string the
 differential tests drive (DynArray batch transfers, Bytes notes, a struct
-argument) is produced by the *verified* encoder in the evm-abi-lean
-development (``functionSelector`` + ``encodeArgs``, the encoder whose
-encode→decode roundtrip is proved by ``roundtrip_args_wff``), not by the
-in-repo Python encoder. The Python encoder (:mod:`venom_opt.abi`) is then
+argument) has its **argument region** produced by the *verified* encoder in
+evm-abi-lean (``encode`` at ``.tuple``, whose encode→decode roundtrip is proved
+by ``roundtrip``), not by the in-repo Python encoder. The 4-byte selector is
+prepended from the pinned ``SELECTORS`` table — keccak lives outside that
+library, whose scope is the codec roundtrip. The Python encoder (:mod:`venom_opt.abi`) is then
 *checked against* these vectors byte-for-byte in ``tests/test_abi_vectors.py``.
+
+The emitted Lean targets abi-lean's **Ty-indexed** codec (``EvmAbi.Ty`` /
+``EvmAbi.Codec``), which replaced the earlier ``ABIType``/``ABIValue`` pair. Two
+consequences for this script: encoding is now total (a ``List UInt8``, not an
+``Except``), because a value's type index already rules out ill-typed inputs; and
+an argument list *is* the tuple of its types — right-nested ``TupleVal`` — so it
+needs no argument-level wrapper from the library. The vectors themselves are unchanged — the rewrite reproduces all 15
+byte-for-byte.
 
 The default source is a **pinned git commit** (``ABI_LEAN_REV`` below), cloned
 into a cache on first use — reproducible on any machine, no local checkout
@@ -36,8 +45,30 @@ OUT = HERE / "tests" / "vectors" / "abi_lean_vectors.json"
 
 #: The verified encoder's source: a pinned evm-abi-lean commit. Bump the pin
 #: (and regenerate) deliberately — the JSON records it as provenance.
+#:
+#: The pin is a *published* upstream commit. Only the **argument region** is
+#: re-derived from it: an argument list is definitionally the tuple of its types,
+#: so `encode (.tuple ts) vs` is all the library needs to provide. The 4-byte
+#: selector is NOT taken from abi-lean -- keccak moved out of that library (its
+#: scope is the codec roundtrip), so the selectors are pinned below instead.
 ABI_LEAN_GIT = "https://github.com/yihuang/evm-abi-lean.git"
-ABI_LEAN_REV = "eaef0ff749f44149dc2c83e6c2fcbeea47bd5f2a"
+ABI_LEAN_REV = "da43ad6ed2c037b593548e65721c674a60fb488e"
+
+#: signature -> 4-byte selector. Pinned rather than computed: ``tests/
+#: test_abi_vectors.py`` rebuilds calldata with ``venom_opt.erc20_abi.selector``
+#: (vyper's ``method_id``) and compares against these vectors, so deriving them
+#: from that same helper here would make the selector half of that assertion
+#: circular. These values are independently proved to equal ``keccak256(sig)[:4]``
+#: by EVMYulLean's ``AbiCrossval.erc20_selectors_match_keccak`` (``decide +kernel``).
+SELECTORS = {
+    "batch_transfer(address[],uint256[])": "833eccc5",
+    "bump_name(string)": "00d87f62",
+    "names(string)": "822fbf58",
+    "pay((address,uint256))": "0c518a32",
+    "set_name(string,uint256)": "1d3e3cde",
+    "transfer(address,uint256)": "a9059cbb",
+    "transfer_with_note(address,uint256,bytes)": "2338ddc9",
+}
 
 ONE = 10**18
 A, B, C, D = ("0x" + x.to_bytes(20, "big").hex() for x in (0xAA, 0xBB, 0xCC, 0xDD))
@@ -109,6 +140,7 @@ VECTORS = [
 
 
 def _lean_type(node: dict) -> str:
+    """A vector node's ABI type, as an ``EvmAbi.Ty`` term."""
     t = node["type"]
     if t == "address":
         return ".address"
@@ -128,25 +160,31 @@ def _lean_type(node: dict) -> str:
 
 
 def _lean_value(node: dict) -> str:
+    """A vector node's value, as an inhabitant of ``(_lean_type node).Val``.
+
+    The Ty-indexed value family is refined per type, so there are no value
+    constructors to name: an ``address`` is a bounded ``Nat`` subtype, ``bytes``
+    is a plain ``List UInt8``, an array is a ``List`` of element values, and a
+    tuple is the right-nested product ``TupleVal`` (hence the trailing ``⟨⟩``).
+    """
     t, v = node["type"], node["value"]
     if t == "address":
-        return f".address (addr {int(v, 16)})"
+        return f"(addr {int(v, 16)})"
     if t == "uint256":
-        return f".uint {int(v)}"
+        return f"(u {int(v)})"
     if t == "bytes":
         data = bytes.fromhex(v[2:])
         if not data:
-            return ".bytes ByteArray.empty"
+            return "([] : List UInt8)"
         lit = ", ".join(f"0x{b:02x}" for b in data)
-        return f".bytes (ByteArray.mk #[{lit}])"
+        return f"([{lit}] : List UInt8)"
     if t == "string":
-        return f'.string "{v}"'  # ASCII vector keys only, no escaping needed
+        return f'("{v}" : String)'  # ASCII vector keys only, no escaping needed
     if t in ("address[]", "uint256[]"):
         elem = "address" if t == "address[]" else "uint256"
-        inner = ", ".join(_lean_value({"type": elem, "value": x}) for x in v)
-        return f".array [{inner}]"
+        return "[" + ", ".join(_lean_value({"type": elem, "value": x}) for x in v) + "]"
     if t == "tuple":
-        return ".tuple [" + ", ".join(_lean_value(n) for n in v) + "]"
+        return "(" + "".join(_lean_value(n) + ", " for n in v) + "⟨⟩)"
     raise ValueError(f"unknown type {t}")
 
 
@@ -154,19 +192,26 @@ def _lean_script() -> str:
     evals = []
     for name, sig, args in VECTORS:
         types = "[" + ", ".join(_lean_type(n) for n in args) + "]"
-        values = "[" + ", ".join(_lean_value(n) for n in args) + "]"
-        evals.append(f"""#eval do
-  match encodeArgs {types} {values} with
-  | .ok args => IO.println s!"{name} {{hexBytes (functionSelector "{sig}" ++ args)}}"
-  | .error e => IO.eprintln s!"{name} ENCODE FAILED: {{repr e}}\"""")
+        # the argument tuple is itself a TupleVal, so it too ends in ⟨⟩
+        values = "(" + "".join(_lean_value(n) + ", " for n in args) + "⟨⟩)"
+        # Plain ``++`` rather than s!-interpolation: an interpolation hole cannot
+        # contain a nested string literal, and the signature is one.
+        evals.append(f'#eval IO.println ("{name} 0x" ++ hexBytes (EvmAbi.encode (.tuple {types}) {values}))')
     body = "\n".join(evals)
-    return f"""import EvmAbi.Hash
-import EvmAbi.ABI
-import EvmAbi.Encode
-open EvmAbi.Hash EvmAbi.ABI EvmAbi.ABI.Encode
+    return f"""import EvmAbi.Codec
+open EvmAbi
 
-def u256 : ABIType := .uint (ByteSize.ofLen 32 (by omega))
-def addr (n : Nat) : ByteArray := (uint256ToBytes n).extract 12 32
+def u256 : Ty := .uint 256
+
+/-- Values are refined subtypes in the Ty-indexed family; the vector spec only
+carries in-range numbers, so the bound is discharged by construction. -/
+def addr (n : Nat) : Ty.Val .address := ⟨n % 2 ^ 160, Nat.mod_lt _ (by decide)⟩
+def u (n : Nat) : Ty.Val u256 := ⟨n % 2 ^ 256, Nat.mod_lt _ (by decide)⟩
+
+def hexBytes (bs : List UInt8) : String :=
+  String.join (bs.map fun b =>
+    let s := Nat.toDigits 16 b.toNat
+    (if s.length == 1 then "0" else "") ++ String.ofList s)
 
 {body}
 """
@@ -199,7 +244,17 @@ def _resolve_checkout() -> Path:
         ).returncode
         != 0
     ):
-        _git(root, "fetch", "--depth", "1", "origin", rev)
+        try:
+            _git(root, "fetch", "--depth", "1", "origin", rev)
+        except subprocess.CalledProcessError as exc:
+            # Much the likeliest cause is a pin that was never pushed (see the
+            # ABI_LEAN_REV note above); a raw traceback buries that.
+            sys.exit(
+                f"FATAL: cannot fetch evm-abi-lean {rev[:7]} from {url}\n"
+                f"  git said: {exc.stderr.strip() or exc}\n"
+                "  If that rev is unpushed, regenerate from a local checkout instead:\n"
+                "      ABI_LEAN=/path/to/evm-abi-lean make vectors"
+            )
     _git(root, "checkout", "-q", "--detach", rev)
     return root
 
@@ -207,7 +262,7 @@ def _resolve_checkout() -> Path:
 def main() -> int:
     abi_lean = _resolve_checkout()
     subprocess.run(
-        ["lake", "build", "EvmAbi.Hash", "EvmAbi.ABI", "EvmAbi.Encode"],
+        ["lake", "build", "EvmAbi.Codec"],
         cwd=abi_lean,
         check=True,
         capture_output=True,
@@ -248,14 +303,14 @@ def main() -> int:
     OUT.write_text(
         json.dumps(
             {
-                "generator": "scripts/gen_abi_vectors.py (evm-abi-lean functionSelector + encodeArgs)",
+                "generator": "scripts/gen_abi_vectors.py (evm-abi-lean encode at .tuple; selectors pinned)",
                 "abi_lean_commit": sha or None,
                 "vectors": [
                     {
                         "name": name,
                         "signature": sig,
                         "args": args,
-                        "calldata": produced[name],
+                        "calldata": "0x" + SELECTORS[sig] + produced[name][2:],
                     }
                     for name, sig, args in VECTORS
                 ],
